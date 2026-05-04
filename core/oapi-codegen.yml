@@ -1,0 +1,11 @@
+package: api
+output: internal/delivery/http/gen/api.gen.go
+
+generate:
+  - strict-server
+  - models
+  - gin-server
+  - spec
+
+compatibility:
+  always-prefix-enum-values: true

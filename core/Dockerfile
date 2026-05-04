@@ -7,7 +7,8 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vpnbot ./cmd/app
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/lab-tracker ./cmd/app
+
 
 FROM debian:bookworm-slim
 
@@ -26,4 +27,4 @@ ENV CONFIG_PATH=/app/config/config.yaml
 
 USER nobody:nogroup
 
-ENTRYPOINT ["/lab-tracker"]
+ENTRYPOINT ["/app/lab-tracker"]

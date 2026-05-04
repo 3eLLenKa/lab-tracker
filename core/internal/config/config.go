@@ -10,9 +10,10 @@ import (
 )
 
 type Config struct {
-	Env    string `yaml:"env" env:"ENV" env-default:"dev"`
-	Server Server `yaml:"server"`
-	DB     DB     `yaml:"db"`
+	Env       string `yaml:"env" env:"ENV" env-default:"dev"`
+	Server    Server `yaml:"server"`
+	DB        DB     `yaml:"db"`
+	JWTSecret string `env:"JWT_SECRET"`
 }
 
 type Server struct {

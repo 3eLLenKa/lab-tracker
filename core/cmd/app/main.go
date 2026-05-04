@@ -15,7 +15,7 @@ import (
 func main() {
 	cfg := config.MustLoad()
 
-	application := app.NewApp(nil, cfg)
+	application := app.NewApp(cfg)
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
