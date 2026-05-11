@@ -94,6 +94,39 @@ type LabWorkListResponse struct {
 	TotalPages int       `json:"totalPages"`
 }
 
+// StudentAssignment defines model for StudentAssignment.
+type StudentAssignment struct {
+	AssignmentId     int        `json:"assignmentId"`
+	AssignmentStatus string     `json:"assignmentStatus"`
+	Deadline         *time.Time `json:"deadline,omitempty"`
+	Description      string     `json:"description"`
+	FilePath         *string    `json:"filePath,omitempty"`
+	Grade            *int       `json:"grade,omitempty"`
+	LabWorkId        int        `json:"labWorkId"`
+	SubmissionId     *int       `json:"submissionId,omitempty"`
+	SubmissionStatus *string    `json:"submissionStatus,omitempty"`
+	SubmittedAt      *time.Time `json:"submittedAt,omitempty"`
+	TeacherComment   *string    `json:"teacherComment,omitempty"`
+	TextReport       *string    `json:"textReport,omitempty"`
+	Title            string     `json:"title"`
+}
+
+// TeacherSubmission defines model for TeacherSubmission.
+type TeacherSubmission struct {
+	AssignmentId   int        `json:"assignmentId"`
+	FilePath       *string    `json:"filePath,omitempty"`
+	Grade          *int       `json:"grade,omitempty"`
+	GroupName      string     `json:"groupName"`
+	LabWorkTitle   string     `json:"labWorkTitle"`
+	Status         string     `json:"status"`
+	StudentId      string     `json:"studentId"`
+	StudentName    string     `json:"studentName"`
+	SubmissionId   int        `json:"submissionId"`
+	SubmittedAt    *time.Time `json:"submittedAt,omitempty"`
+	TeacherComment *string    `json:"teacherComment,omitempty"`
+	TextReport     string     `json:"textReport"`
+}
+
 // Token defines model for Token.
 type Token struct {
 	Token string `json:"token"`
@@ -122,8 +155,9 @@ type PostApiV1AuthRegisterJSONBody struct {
 
 // PostApiV1GradesSetJSONBody defines parameters for PostApiV1GradesSet.
 type PostApiV1GradesSetJSONBody struct {
-	Grade        int `json:"grade"`
-	SubmissionId int `json:"submissionId"`
+	Comment      *string `json:"comment,omitempty"`
+	Grade        int     `json:"grade"`
+	SubmissionId int     `json:"submissionId"`
 }
 
 // PostApiV1GroupsCreateJSONBody defines parameters for PostApiV1GroupsCreate.
@@ -151,6 +185,7 @@ type GetApiV1LabworksParams struct {
 // PostApiV1SubmissionsCreateJSONBody defines parameters for PostApiV1SubmissionsCreate.
 type PostApiV1SubmissionsCreateJSONBody struct {
 	AssignmentId int     `json:"assignmentId"`
+	FilePath     *string `json:"filePath,omitempty"`
 	TextReport   *string `json:"textReport,omitempty"`
 }
 
@@ -208,11 +243,17 @@ type ServerInterface interface {
 	// (GET /api/v1/labworks/{id})
 	GetApiV1LabworksId(c *gin.Context, id GetApiV1LabworksIdIdPath)
 
+	// (GET /api/v1/student/assignments)
+	GetApiV1StudentAssignments(c *gin.Context)
+
 	// (PUT /api/v1/labworks/{id})
 	PutApiV1LabworksId(c *gin.Context, id PutApiV1LabworksIdIdPath)
 
 	// (DELETE /api/v1/labworks/{id})
 	DeleteApiV1LabworksId(c *gin.Context, id DeleteApiV1LabworksIdIdPath)
+
+	// (GET /api/v1/teacher/submissions)
+	GetApiV1TeacherSubmissions(c *gin.Context)
 
 	// (POST /api/v1/submissions/create)
 	PostApiV1SubmissionsCreate(c *gin.Context)
@@ -311,6 +352,21 @@ func (siw *ServerInterfaceWrapper) GetApiV1GroupsList(c *gin.Context) {
 	}
 
 	siw.Handler.GetApiV1GroupsList(c)
+}
+
+// GetApiV1StudentAssignments operation middleware
+func (siw *ServerInterfaceWrapper) GetApiV1StudentAssignments(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetApiV1StudentAssignments(c)
 }
 
 // GetApiV1Labworks operation middleware
@@ -432,6 +488,21 @@ func (siw *ServerInterfaceWrapper) DeleteApiV1LabworksId(c *gin.Context) {
 	siw.Handler.DeleteApiV1LabworksId(c, id)
 }
 
+// GetApiV1TeacherSubmissions operation middleware
+func (siw *ServerInterfaceWrapper) GetApiV1TeacherSubmissions(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetApiV1TeacherSubmissions(c)
+}
+
 // PostApiV1SubmissionsCreate operation middleware
 func (siw *ServerInterfaceWrapper) PostApiV1SubmissionsCreate(c *gin.Context) {
 
@@ -483,8 +554,10 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/api/v1/labworks", wrapper.GetApiV1Labworks)
 	router.POST(options.BaseURL+"/api/v1/labworks", wrapper.PostApiV1Labworks)
 	router.GET(options.BaseURL+"/api/v1/labworks/:id", wrapper.GetApiV1LabworksId)
+	router.GET(options.BaseURL+"/api/v1/student/assignments", wrapper.GetApiV1StudentAssignments)
 	router.PUT(options.BaseURL+"/api/v1/labworks/:id", wrapper.PutApiV1LabworksId)
 	router.DELETE(options.BaseURL+"/api/v1/labworks/:id", wrapper.DeleteApiV1LabworksId)
+	router.GET(options.BaseURL+"/api/v1/teacher/submissions", wrapper.GetApiV1TeacherSubmissions)
 	router.POST(options.BaseURL+"/api/v1/submissions/create", wrapper.PostApiV1SubmissionsCreate)
 }
 
@@ -936,6 +1009,50 @@ func (response GetApiV1LabworksId500JSONResponse) VisitGetApiV1LabworksIdRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetApiV1StudentAssignmentsRequestObject struct{}
+
+type GetApiV1StudentAssignmentsResponseObject interface {
+	VisitGetApiV1StudentAssignmentsResponse(w http.ResponseWriter) error
+}
+
+type GetApiV1StudentAssignments200JSONResponse struct {
+	Assignments *[]StudentAssignment `json:"assignments,omitempty"`
+}
+
+func (response GetApiV1StudentAssignments200JSONResponse) VisitGetApiV1StudentAssignmentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1StudentAssignments401JSONResponse ErrorResponse
+
+func (response GetApiV1StudentAssignments401JSONResponse) VisitGetApiV1StudentAssignmentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1StudentAssignments403JSONResponse ErrorResponse
+
+func (response GetApiV1StudentAssignments403JSONResponse) VisitGetApiV1StudentAssignmentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1StudentAssignments500JSONResponse ErrorResponse
+
+func (response GetApiV1StudentAssignments500JSONResponse) VisitGetApiV1StudentAssignmentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type PutApiV1LabworksIdRequestObject struct {
 	Id   PutApiV1LabworksIdIdPath `json:"id"`
 	Body *PutApiV1LabworksIdJSONRequestBody
@@ -1059,6 +1176,50 @@ func (response DeleteApiV1LabworksId500JSONResponse) VisitDeleteApiV1LabworksIdR
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetApiV1TeacherSubmissionsRequestObject struct{}
+
+type GetApiV1TeacherSubmissionsResponseObject interface {
+	VisitGetApiV1TeacherSubmissionsResponse(w http.ResponseWriter) error
+}
+
+type GetApiV1TeacherSubmissions200JSONResponse struct {
+	Submissions *[]TeacherSubmission `json:"submissions,omitempty"`
+}
+
+func (response GetApiV1TeacherSubmissions200JSONResponse) VisitGetApiV1TeacherSubmissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1TeacherSubmissions401JSONResponse ErrorResponse
+
+func (response GetApiV1TeacherSubmissions401JSONResponse) VisitGetApiV1TeacherSubmissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1TeacherSubmissions403JSONResponse ErrorResponse
+
+func (response GetApiV1TeacherSubmissions403JSONResponse) VisitGetApiV1TeacherSubmissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1TeacherSubmissions500JSONResponse ErrorResponse
+
+func (response GetApiV1TeacherSubmissions500JSONResponse) VisitGetApiV1TeacherSubmissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type PostApiV1SubmissionsCreateRequestObject struct {
 	Body *PostApiV1SubmissionsCreateJSONRequestBody
 }
@@ -1168,11 +1329,17 @@ type StrictServerInterface interface {
 	// (GET /api/v1/labworks/{id})
 	GetApiV1LabworksId(ctx context.Context, request GetApiV1LabworksIdRequestObject) (GetApiV1LabworksIdResponseObject, error)
 
+	// (GET /api/v1/student/assignments)
+	GetApiV1StudentAssignments(ctx context.Context, request GetApiV1StudentAssignmentsRequestObject) (GetApiV1StudentAssignmentsResponseObject, error)
+
 	// (PUT /api/v1/labworks/{id})
 	PutApiV1LabworksId(ctx context.Context, request PutApiV1LabworksIdRequestObject) (PutApiV1LabworksIdResponseObject, error)
 
 	// (DELETE /api/v1/labworks/{id})
 	DeleteApiV1LabworksId(ctx context.Context, request DeleteApiV1LabworksIdRequestObject) (DeleteApiV1LabworksIdResponseObject, error)
+
+	// (GET /api/v1/teacher/submissions)
+	GetApiV1TeacherSubmissions(ctx context.Context, request GetApiV1TeacherSubmissionsRequestObject) (GetApiV1TeacherSubmissionsResponseObject, error)
 
 	// (POST /api/v1/submissions/create)
 	PostApiV1SubmissionsCreate(ctx context.Context, request PostApiV1SubmissionsCreateRequestObject) (PostApiV1SubmissionsCreateResponseObject, error)
@@ -1467,6 +1634,31 @@ func (sh *strictHandler) GetApiV1LabworksId(ctx *gin.Context, id GetApiV1Labwork
 	}
 }
 
+// GetApiV1StudentAssignments operation middleware
+func (sh *strictHandler) GetApiV1StudentAssignments(ctx *gin.Context) {
+	var request GetApiV1StudentAssignmentsRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetApiV1StudentAssignments(ctx, request.(GetApiV1StudentAssignmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetApiV1StudentAssignments")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(GetApiV1StudentAssignmentsResponseObject); ok {
+		if err := validResponse.VisitGetApiV1StudentAssignmentsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PutApiV1LabworksId operation middleware
 func (sh *strictHandler) PutApiV1LabworksId(ctx *gin.Context, id PutApiV1LabworksIdIdPath) {
 	var request PutApiV1LabworksIdRequestObject
@@ -1522,6 +1714,31 @@ func (sh *strictHandler) DeleteApiV1LabworksId(ctx *gin.Context, id DeleteApiV1L
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(DeleteApiV1LabworksIdResponseObject); ok {
 		if err := validResponse.VisitDeleteApiV1LabworksIdResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetApiV1TeacherSubmissions operation middleware
+func (sh *strictHandler) GetApiV1TeacherSubmissions(ctx *gin.Context) {
+	var request GetApiV1TeacherSubmissionsRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetApiV1TeacherSubmissions(ctx, request.(GetApiV1TeacherSubmissionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetApiV1TeacherSubmissions")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(GetApiV1TeacherSubmissionsResponseObject); ok {
+		if err := validResponse.VisitGetApiV1TeacherSubmissionsResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

@@ -144,6 +144,7 @@ components:
 
     Submission:
       type: object
+      required: [id, assignmentId, studentId, status]
       properties:
         id:
           type: integer
@@ -152,8 +153,92 @@ components:
         studentId:
           type: string
           format: uuid
+        textReport:
+          type: string
+        filePath:
+          type: string
+          nullable: true
         status:
           type: string
+        submittedAt:
+          type: string
+          format: date-time
+
+    StudentAssignment:
+      type: object
+      required: [assignmentId, labWorkId, title, description, assignmentStatus]
+      properties:
+        assignmentId:
+          type: integer
+        labWorkId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        assignmentStatus:
+          type: string
+        submissionId:
+          type: integer
+          nullable: true
+        submissionStatus:
+          type: string
+          nullable: true
+        textReport:
+          type: string
+          nullable: true
+        filePath:
+          type: string
+          nullable: true
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        grade:
+          type: integer
+          nullable: true
+        teacherComment:
+          type: string
+          nullable: true
+
+    TeacherSubmission:
+      type: object
+      required: [submissionId, assignmentId, studentId, studentName, groupName, labWorkTitle, textReport, status]
+      properties:
+        submissionId:
+          type: integer
+        assignmentId:
+          type: integer
+        studentId:
+          type: string
+          format: uuid
+        studentName:
+          type: string
+        groupName:
+          type: string
+        labWorkTitle:
+          type: string
+        textReport:
+          type: string
+        filePath:
+          type: string
+          nullable: true
+        status:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        grade:
+          type: integer
+          nullable: true
+        teacherComment:
+          type: string
+          nullable: true
 
     Grade:
       type: object
@@ -427,6 +512,64 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
+  /api/v1/student/assignments:
+    get:
+      tags: [Assignments]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Student assignments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assignments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentAssignment'
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/teacher/submissions:
+    get:
+      tags: [Submissions]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Teacher submissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  submissions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeacherSubmission'
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
     put:
       tags: [LabWorks]
       security: [{ BearerAuth: [] }]
@@ -564,6 +707,9 @@ paths:
                   type: integer
                 textReport:
                   type: string
+                filePath:
+                  type: string
+                  nullable: true
       responses:
         '201': {}
         '400':
@@ -614,6 +760,8 @@ paths:
                   type: integer
                 grade:
                   type: integer
+                comment:
+                  type: string
       responses:
         '200': {}
         '400':

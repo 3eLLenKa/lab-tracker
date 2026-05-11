@@ -19,6 +19,10 @@ type Service interface {
 	CreateLabWork(ctx context.Context, input domain.LabWorkInput) (*domain.LabWork, error)
 	UpdateLabWork(ctx context.Context, id int64, input domain.LabWorkInput) (*domain.LabWork, error)
 	DeleteLabWork(ctx context.Context, id int64) error
+	ListStudentAssignments(ctx context.Context, studentID uuid.UUID) ([]domain.StudentAssignment, error)
+	SubmitAssignment(ctx context.Context, input domain.SubmissionInput) error
+	ListTeacherSubmissions(ctx context.Context, teacherID uuid.UUID) ([]domain.TeacherSubmission, error)
+	SetGrade(ctx context.Context, input domain.GradeInput) error
 	Login(ctx context.Context, username, password string) (string, error)
 	Register(ctx context.Context, username, password, fullName string, groupID int) (string, error)
 }
@@ -281,6 +285,32 @@ func (h *Handler) DeleteApiV1LabworksId(
 	return api.DeleteApiV1LabworksId204Response{}, nil
 }
 
+// (GET /api/v1/student/assignments)
+func (h *Handler) GetApiV1StudentAssignments(
+	ctx context.Context,
+	_ api.GetApiV1StudentAssignmentsRequestObject,
+) (api.GetApiV1StudentAssignmentsResponseObject, error) {
+	userID, role, ok := authorizedUser(ctx)
+	if !ok {
+		return api.GetApiV1StudentAssignments401JSONResponse(unauthorized()), nil
+	}
+	if role != domain.RoleStudent {
+		return api.GetApiV1StudentAssignments403JSONResponse(forbidden()), nil
+	}
+
+	assignments, err := h.svc.ListStudentAssignments(ctx, userID)
+	if err != nil {
+		return api.GetApiV1StudentAssignments500JSONResponse(internalError()), nil
+	}
+
+	result := make([]api.StudentAssignment, 0, len(assignments))
+	for _, item := range assignments {
+		result = append(result, toAPIStudentAssignment(item))
+	}
+
+	return api.GetApiV1StudentAssignments200JSONResponse{Assignments: &result}, nil
+}
+
 // (POST /api/v1/assignments/create)
 func (h *Handler) PostApiV1AssignmentsCreate(
 	ctx context.Context,
@@ -295,7 +325,38 @@ func (h *Handler) PostApiV1SubmissionsCreate(
 	ctx context.Context,
 	request api.PostApiV1SubmissionsCreateRequestObject,
 ) (api.PostApiV1SubmissionsCreateResponseObject, error) {
-	// TODO: реализовать
+	userID, role, ok := authorizedUser(ctx)
+	if !ok {
+		return api.PostApiV1SubmissionsCreate401JSONResponse(unauthorized()), nil
+	}
+	if role != domain.RoleStudent {
+		return api.PostApiV1SubmissionsCreate403JSONResponse(forbidden()), nil
+	}
+	if request.Body == nil || request.Body.AssignmentId <= 0 || request.Body.TextReport == nil || strings.TrimSpace(*request.Body.TextReport) == "" {
+		return api.PostApiV1SubmissionsCreate400JSONResponse(invalidRequest("")), nil
+	}
+
+	err := h.svc.SubmitAssignment(ctx, domain.SubmissionInput{
+		AssignmentID: int64(request.Body.AssignmentId),
+		StudentID:    userID,
+		TextReport:   strings.TrimSpace(*request.Body.TextReport),
+		FilePath:     request.Body.FilePath,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrInvalidRequest):
+			return api.PostApiV1SubmissionsCreate400JSONResponse(invalidRequest("")), nil
+		case errors.Is(err, domain.ErrAssignmentNotFound):
+			return api.PostApiV1SubmissionsCreate404JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeASSIGNMENTNOTFOUND, domain.ErrAssignmentNotFound.Error())), nil
+		case errors.Is(err, domain.ErrAlreadySubmitted):
+			return api.PostApiV1SubmissionsCreate409JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeALREADYSUBMITTED, domain.ErrAlreadySubmitted.Error())), nil
+		case errors.Is(err, domain.ErrDeadlinePassed):
+			return api.PostApiV1SubmissionsCreate422JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeDEADLINEPASSED, domain.ErrDeadlinePassed.Error())), nil
+		default:
+			return api.PostApiV1SubmissionsCreate500JSONResponse(internalError()), nil
+		}
+	}
+
 	return api.PostApiV1SubmissionsCreate201Response{}, nil
 }
 
@@ -304,8 +365,66 @@ func (h *Handler) PostApiV1GradesSet(
 	ctx context.Context,
 	request api.PostApiV1GradesSetRequestObject,
 ) (api.PostApiV1GradesSetResponseObject, error) {
-	// TODO: реализовать
+	userID, role, ok := authorizedUser(ctx)
+	if !ok {
+		return api.PostApiV1GradesSet401JSONResponse(unauthorized()), nil
+	}
+	if role != domain.RoleTeacher {
+		return api.PostApiV1GradesSet403JSONResponse(forbidden()), nil
+	}
+	if request.Body == nil {
+		return api.PostApiV1GradesSet400JSONResponse(invalidRequest("")), nil
+	}
+
+	comment := ""
+	if request.Body.Comment != nil {
+		comment = *request.Body.Comment
+	}
+
+	err := h.svc.SetGrade(ctx, domain.GradeInput{
+		SubmissionID: int64(request.Body.SubmissionId),
+		TeacherID:    userID,
+		Grade:        request.Body.Grade,
+		Comment:      comment,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrInvalidRequest):
+			return api.PostApiV1GradesSet400JSONResponse(invalidRequest("")), nil
+		case errors.Is(err, domain.ErrSubmissionNotFound):
+			return api.PostApiV1GradesSet404JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeSUBMISSIONNOTFOUND, domain.ErrSubmissionNotFound.Error())), nil
+		default:
+			return api.PostApiV1GradesSet500JSONResponse(internalError()), nil
+		}
+	}
+
 	return api.PostApiV1GradesSet200Response{}, nil
+}
+
+// (GET /api/v1/teacher/submissions)
+func (h *Handler) GetApiV1TeacherSubmissions(
+	ctx context.Context,
+	_ api.GetApiV1TeacherSubmissionsRequestObject,
+) (api.GetApiV1TeacherSubmissionsResponseObject, error) {
+	userID, role, ok := authorizedUser(ctx)
+	if !ok {
+		return api.GetApiV1TeacherSubmissions401JSONResponse(unauthorized()), nil
+	}
+	if role != domain.RoleTeacher {
+		return api.GetApiV1TeacherSubmissions403JSONResponse(forbidden()), nil
+	}
+
+	submissions, err := h.svc.ListTeacherSubmissions(ctx, userID)
+	if err != nil {
+		return api.GetApiV1TeacherSubmissions500JSONResponse(internalError()), nil
+	}
+
+	result := make([]api.TeacherSubmission, 0, len(submissions))
+	for _, item := range submissions {
+		result = append(result, toAPITeacherSubmission(item))
+	}
+
+	return api.GetApiV1TeacherSubmissions200JSONResponse{Submissions: &result}, nil
 }
 
 func authorizedUser(ctx context.Context) (uuid.UUID, domain.UserRole, bool) {
@@ -357,4 +476,61 @@ func toAPILabWork(labWork domain.LabWork) api.LabWork {
 		FilePath:    labWork.FilePath,
 		CreatedAt:   createdAt,
 	}
+}
+
+func toAPIStudentAssignment(item domain.StudentAssignment) api.StudentAssignment {
+	return api.StudentAssignment{
+		AssignmentId:     int(item.AssignmentID),
+		AssignmentStatus: item.AssignmentStatus,
+		Deadline:         parseOptionalRFC3339(item.Deadline),
+		Description:      item.Description,
+		FilePath:         item.FilePath,
+		Grade:            item.Grade,
+		LabWorkId:        int(item.LabWorkID),
+		SubmissionId:     int64PtrToIntPtr(item.SubmissionID),
+		SubmissionStatus: item.SubmissionStatus,
+		SubmittedAt:      parseOptionalRFC3339(item.SubmittedAt),
+		TeacherComment:   item.TeacherComment,
+		TextReport:       item.TextReport,
+		Title:            item.Title,
+	}
+}
+
+func toAPITeacherSubmission(item domain.TeacherSubmission) api.TeacherSubmission {
+	return api.TeacherSubmission{
+		AssignmentId:   int(item.AssignmentID),
+		FilePath:       item.FilePath,
+		Grade:          item.Grade,
+		GroupName:      item.GroupName,
+		LabWorkTitle:   item.LabWorkTitle,
+		Status:         item.Status,
+		StudentId:      item.StudentID.String(),
+		StudentName:    item.StudentName,
+		SubmissionId:   int(item.SubmissionID),
+		SubmittedAt:    parseOptionalRFC3339(item.SubmittedAt),
+		TeacherComment: item.TeacherComment,
+		TextReport:     item.TextReport,
+	}
+}
+
+func parseOptionalRFC3339(value *string) *time.Time {
+	if value == nil || *value == "" {
+		return nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339, *value)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
+}
+
+func int64PtrToIntPtr(value *int64) *int {
+	if value == nil {
+		return nil
+	}
+
+	converted := int(*value)
+	return &converted
 }

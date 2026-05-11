@@ -30,7 +30,16 @@ func NewApp(cfg *config.Config) *App {
 	}
 
 	repo := repository.New(conn.Db)
-	svc := service.New(log, repo.UserRepo, repo.GroupRepo, repo.LabWorkRepo, cfg.JWTSecret)
+	svc := service.New(
+		log,
+		repo.UserRepo,
+		repo.GroupRepo,
+		repo.LabWorkRepo,
+		repo.AssignmentRepo,
+		repo.SubmissionRepo,
+		repo.GradeRepo,
+		cfg.JWTSecret,
+	)
 
 	r, err := router.Init(svc, log, cfg.JWTSecret)
 	if err != nil {

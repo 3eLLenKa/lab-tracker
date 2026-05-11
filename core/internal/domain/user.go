@@ -64,3 +64,48 @@ type LabWorkInput struct {
 	FilePath    *string
 	CreatedBy   *uuid.UUID
 }
+
+type StudentAssignment struct {
+	AssignmentID     int64
+	LabWorkID        int64
+	Title            string
+	Description      string
+	Deadline         *string
+	AssignmentStatus string
+	SubmissionID     *int64
+	SubmissionStatus *string
+	TextReport       *string
+	FilePath         *string
+	SubmittedAt      *string
+	Grade            *int
+	TeacherComment   *string
+}
+
+type SubmissionInput struct {
+	AssignmentID int64
+	StudentID    uuid.UUID
+	TextReport   string
+	FilePath     *string
+}
+
+type TeacherSubmission struct {
+	SubmissionID   int64
+	AssignmentID   int64
+	StudentID      uuid.UUID
+	StudentName    string
+	GroupName      string
+	LabWorkTitle   string
+	TextReport     string
+	FilePath       *string
+	Status         string
+	SubmittedAt    *string
+	Grade          *int
+	TeacherComment *string
+}
+
+type GradeInput struct {
+	SubmissionID int64
+	TeacherID    uuid.UUID
+	Grade        int
+	Comment      string
+}

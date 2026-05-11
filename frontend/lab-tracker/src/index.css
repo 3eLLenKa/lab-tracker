@@ -657,6 +657,87 @@ body::before {
   gap: 0.65rem;
 }
 
+.student-card,
+.teacher-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1.1rem 1.2rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.student-card-top,
+.teacher-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.student-meta,
+.teacher-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-top: 0.35rem;
+  letter-spacing: 0.04em;
+}
+
+.student-description,
+.teacher-report {
+  color: var(--text);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.student-actions {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.submission-form {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.file-chip {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.grade-box {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(46,204,113,0.25);
+  background: rgba(46,204,113,0.07);
+}
+
+.grade-box span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.teacher-main {
+  max-width: 980px;
+}
+
+.teacher-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.grade-form-grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 1rem;
+}
+
 @media (max-width: 900px) {
   .dash-header {
     padding: 1rem;
@@ -675,7 +756,8 @@ body::before {
 
   .toolbar,
   .form-actions,
-  .admin-item-actions {
+  .admin-item-actions,
+  .student-actions {
     flex-direction: column;
   }
 
@@ -687,6 +769,13 @@ body::before {
 
   .pagination {
     flex-direction: column;
+  }
+
+  .student-card-top,
+  .teacher-head,
+  .grade-form-grid {
+    grid-template-columns: 1fr;
+    display: grid;
   }
 
   .field-row {

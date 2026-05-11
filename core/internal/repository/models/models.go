@@ -78,7 +78,7 @@ type Group struct {
 	ID        int64
 	Name      string
 	Course    int
-	TeacherID *string
+	TeacherID *uuid.UUID
 }
 
 type LabWork struct {
@@ -106,7 +106,7 @@ type Assignment struct {
 type Submission struct {
 	ID           int64
 	AssignmentID int64
-	StudentID    string
+	StudentID    uuid.UUID
 	TextReport   string
 	FilePath     *string
 	Status       SubmissionStatus
@@ -116,7 +116,7 @@ type Submission struct {
 type Grade struct {
 	ID           int64
 	SubmissionID int64
-	TeacherID    *string
+	TeacherID    *uuid.UUID
 	Grade        int
 	Comment      string
 	GradedAt     *time.Time

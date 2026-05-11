@@ -17,20 +17,35 @@ import (
 )
 
 type Service struct {
-	log         *zap.Logger
-	userRepo    UserRepo
-	groupRepo   GroupRepo
-	labWorkRepo LabWorkRepo
-	jwtSecret   string
+	log            *zap.Logger
+	userRepo       UserRepo
+	groupRepo      GroupRepo
+	labWorkRepo    LabWorkRepo
+	assignmentRepo AssignmentRepo
+	submissionRepo SubmissionRepo
+	gradeRepo      GradeRepo
+	jwtSecret      string
 }
 
-func New(log *zap.Logger, userRepo UserRepo, groupRepo GroupRepo, labWorkRepo LabWorkRepo, jwtSecret string) *Service {
+func New(
+	log *zap.Logger,
+	userRepo UserRepo,
+	groupRepo GroupRepo,
+	labWorkRepo LabWorkRepo,
+	assignmentRepo AssignmentRepo,
+	submissionRepo SubmissionRepo,
+	gradeRepo GradeRepo,
+	jwtSecret string,
+) *Service {
 	return &Service{
-		log:         log,
-		userRepo:    userRepo,
-		groupRepo:   groupRepo,
-		labWorkRepo: labWorkRepo,
-		jwtSecret:   jwtSecret,
+		log:            log,
+		userRepo:       userRepo,
+		groupRepo:      groupRepo,
+		labWorkRepo:    labWorkRepo,
+		assignmentRepo: assignmentRepo,
+		submissionRepo: submissionRepo,
+		gradeRepo:      gradeRepo,
+		jwtSecret:      jwtSecret,
 	}
 }
 
@@ -250,6 +265,80 @@ func (s *Service) DeleteLabWork(ctx context.Context, id int64) error {
 		}
 		return fmt.Errorf("service: delete lab work: %w", err)
 	}
+	return nil
+}
+
+func (s *Service) ListStudentAssignments(ctx context.Context, studentID uuid.UUID) ([]domain.StudentAssignment, error) {
+	assignments, err := s.assignmentRepo.ListStudentAssignments(ctx, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("service: list student assignments: %w", err)
+	}
+	return assignments, nil
+}
+
+func (s *Service) SubmitAssignment(ctx context.Context, input domain.SubmissionInput) error {
+	if input.AssignmentID <= 0 || strings.TrimSpace(input.TextReport) == "" {
+		return domain.ErrInvalidRequest
+	}
+
+	assignment, submission, err := s.submissionRepo.GetStudentAssignmentMeta(ctx, input.AssignmentID, input.StudentID)
+	if err != nil {
+		if errors.Is(err, models.ErrAssignmentNotFound) {
+			return domain.ErrAssignmentNotFound
+		}
+		return fmt.Errorf("service: get assignment meta: %w", err)
+	}
+
+	if assignment.Deadline != nil && assignment.Deadline.Before(time.Now()) {
+		return domain.ErrDeadlinePassed
+	}
+
+	if submission == nil {
+		_, err = s.submissionRepo.Create(ctx, input)
+		if err != nil {
+			return fmt.Errorf("service: create submission: %w", err)
+		}
+		return nil
+	}
+
+	if submission.SubmittedAt != nil && submission.Status != models.SubmissionPending {
+		return domain.ErrAlreadySubmitted
+	}
+
+	if _, err := s.submissionRepo.UpdateDraft(ctx, submission.ID, input); err != nil {
+		return fmt.Errorf("service: update submission draft: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) ListTeacherSubmissions(ctx context.Context, teacherID uuid.UUID) ([]domain.TeacherSubmission, error) {
+	items, err := s.submissionRepo.ListTeacherSubmissions(ctx, teacherID)
+	if err != nil {
+		return nil, fmt.Errorf("service: list teacher submissions: %w", err)
+	}
+	return items, nil
+}
+
+func (s *Service) SetGrade(ctx context.Context, input domain.GradeInput) error {
+	if input.SubmissionID <= 0 || input.Grade < 0 || input.Grade > 100 {
+		return domain.ErrInvalidRequest
+	}
+
+	if err := s.submissionRepo.ExistsForTeacher(ctx, input.SubmissionID, input.TeacherID); err != nil {
+		if errors.Is(err, models.ErrSubmissionNotFound) {
+			return domain.ErrSubmissionNotFound
+		}
+		return fmt.Errorf("service: validate teacher submission: %w", err)
+	}
+
+	if err := s.gradeRepo.Save(ctx, input.SubmissionID, input.TeacherID, input.Grade, strings.TrimSpace(input.Comment)); err != nil {
+		return fmt.Errorf("service: save grade: %w", err)
+	}
+	if err := s.submissionRepo.MarkChecked(ctx, input.SubmissionID); err != nil {
+		return fmt.Errorf("service: mark submission checked: %w", err)
+	}
+
 	return nil
 }
 
