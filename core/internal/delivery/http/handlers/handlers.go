@@ -23,6 +23,9 @@ type Service interface {
 	SubmitAssignment(ctx context.Context, input domain.SubmissionInput) error
 	ListTeacherSubmissions(ctx context.Context, teacherID uuid.UUID) ([]domain.TeacherSubmission, error)
 	SetGrade(ctx context.Context, input domain.GradeInput) error
+	GetStudentProgress(ctx context.Context, studentID uuid.UUID) (*domain.StudentProgress, error)
+	GetAdminStats(ctx context.Context) (*domain.AdminStats, error)
+	ExportAdminReportCSV(ctx context.Context) ([]byte, error)
 	Login(ctx context.Context, username, password string) (string, error)
 	Register(ctx context.Context, username, password, fullName string, groupID int) (string, error)
 }
@@ -311,6 +314,28 @@ func (h *Handler) GetApiV1StudentAssignments(
 	return api.GetApiV1StudentAssignments200JSONResponse{Assignments: &result}, nil
 }
 
+// (GET /api/v1/student/progress)
+func (h *Handler) GetApiV1StudentProgress(
+	ctx context.Context,
+	_ api.GetApiV1StudentProgressRequestObject,
+) (api.GetApiV1StudentProgressResponseObject, error) {
+	userID, role, ok := authorizedUser(ctx)
+	if !ok {
+		return api.GetApiV1StudentProgress401JSONResponse(unauthorized()), nil
+	}
+	if role != domain.RoleStudent {
+		return api.GetApiV1StudentProgress403JSONResponse(forbidden()), nil
+	}
+
+	progress, err := h.svc.GetStudentProgress(ctx, userID)
+	if err != nil {
+		return api.GetApiV1StudentProgress500JSONResponse(internalError()), nil
+	}
+
+	response := api.GetApiV1StudentProgress200JSONResponse(toAPIStudentProgress(*progress))
+	return response, nil
+}
+
 // (POST /api/v1/assignments/create)
 func (h *Handler) PostApiV1AssignmentsCreate(
 	ctx context.Context,
@@ -350,6 +375,8 @@ func (h *Handler) PostApiV1SubmissionsCreate(
 			return api.PostApiV1SubmissionsCreate404JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeASSIGNMENTNOTFOUND, domain.ErrAssignmentNotFound.Error())), nil
 		case errors.Is(err, domain.ErrAlreadySubmitted):
 			return api.PostApiV1SubmissionsCreate409JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeALREADYSUBMITTED, domain.ErrAlreadySubmitted.Error())), nil
+		case errors.Is(err, domain.ErrSubmissionLocked):
+			return api.PostApiV1SubmissionsCreate409JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeALREADYSUBMITTED, domain.ErrSubmissionLocked.Error())), nil
 		case errors.Is(err, domain.ErrDeadlinePassed):
 			return api.PostApiV1SubmissionsCreate422JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeDEADLINEPASSED, domain.ErrDeadlinePassed.Error())), nil
 		default:
@@ -386,11 +413,14 @@ func (h *Handler) PostApiV1GradesSet(
 		TeacherID:    userID,
 		Grade:        request.Body.Grade,
 		Comment:      comment,
+		Status:       request.Body.Status,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidRequest):
 			return api.PostApiV1GradesSet400JSONResponse(invalidRequest("")), nil
+		case errors.Is(err, domain.ErrSubmissionLocked):
+			return api.PostApiV1GradesSet400JSONResponse(invalidRequest(domain.ErrSubmissionLocked.Error())), nil
 		case errors.Is(err, domain.ErrSubmissionNotFound):
 			return api.PostApiV1GradesSet404JSONResponse(newErrorResponse(api.ErrorResponseErrorCodeSUBMISSIONNOTFOUND, domain.ErrSubmissionNotFound.Error())), nil
 		default:
@@ -425,6 +455,49 @@ func (h *Handler) GetApiV1TeacherSubmissions(
 	}
 
 	return api.GetApiV1TeacherSubmissions200JSONResponse{Submissions: &result}, nil
+}
+
+// (GET /api/v1/admin/stats)
+func (h *Handler) GetApiV1AdminStats(
+	ctx context.Context,
+	_ api.GetApiV1AdminStatsRequestObject,
+) (api.GetApiV1AdminStatsResponseObject, error) {
+	_, role, ok := authorizedUser(ctx)
+	if !ok {
+		return api.GetApiV1AdminStats401JSONResponse(unauthorized()), nil
+	}
+	if role != domain.RoleAdmin {
+		return api.GetApiV1AdminStats403JSONResponse(forbidden()), nil
+	}
+
+	stats, err := h.svc.GetAdminStats(ctx)
+	if err != nil {
+		return api.GetApiV1AdminStats500JSONResponse(internalError()), nil
+	}
+
+	response := api.GetApiV1AdminStats200JSONResponse(toAPIAdminStats(*stats))
+	return response, nil
+}
+
+// (GET /api/v1/admin/export.csv)
+func (h *Handler) GetApiV1AdminExportCsv(
+	ctx context.Context,
+	_ api.GetApiV1AdminExportCsvRequestObject,
+) (api.GetApiV1AdminExportCsvResponseObject, error) {
+	_, role, ok := authorizedUser(ctx)
+	if !ok {
+		return api.GetApiV1AdminExportCsv401JSONResponse(unauthorized()), nil
+	}
+	if role != domain.RoleAdmin {
+		return api.GetApiV1AdminExportCsv403JSONResponse(forbidden()), nil
+	}
+
+	data, err := h.svc.ExportAdminReportCSV(ctx)
+	if err != nil {
+		return api.GetApiV1AdminExportCsv500JSONResponse(internalError()), nil
+	}
+
+	return api.GetApiV1AdminExportCsv200TextcsvResponse(data), nil
 }
 
 func authorizedUser(ctx context.Context) (uuid.UUID, domain.UserRole, bool) {
@@ -487,6 +560,7 @@ func toAPIStudentAssignment(item domain.StudentAssignment) api.StudentAssignment
 		FilePath:         item.FilePath,
 		Grade:            item.Grade,
 		LabWorkId:        int(item.LabWorkID),
+		AttemptNumber:    item.AttemptNumber,
 		SubmissionId:     int64PtrToIntPtr(item.SubmissionID),
 		SubmissionStatus: item.SubmissionStatus,
 		SubmittedAt:      parseOptionalRFC3339(item.SubmittedAt),
@@ -499,6 +573,8 @@ func toAPIStudentAssignment(item domain.StudentAssignment) api.StudentAssignment
 func toAPITeacherSubmission(item domain.TeacherSubmission) api.TeacherSubmission {
 	return api.TeacherSubmission{
 		AssignmentId:   int(item.AssignmentID),
+		AttemptNumber:  item.AttemptNumber,
+		Deadline:       parseOptionalRFC3339(item.Deadline),
 		FilePath:       item.FilePath,
 		Grade:          item.Grade,
 		GroupName:      item.GroupName,
@@ -510,6 +586,35 @@ func toAPITeacherSubmission(item domain.TeacherSubmission) api.TeacherSubmission
 		SubmittedAt:    parseOptionalRFC3339(item.SubmittedAt),
 		TeacherComment: item.TeacherComment,
 		TextReport:     item.TextReport,
+	}
+}
+
+func toAPIStudentProgress(progress domain.StudentProgress) api.StudentProgress {
+	return api.StudentProgress{
+		AverageGrade:     progress.AverageGrade,
+		CompletionRate:   progress.CompletionRate,
+		DraftCount:       progress.DraftCount,
+		ReviewedCount:    progress.ReviewedCount,
+		RevisionCount:    progress.RevisionCount,
+		SubmittedCount:   progress.SubmittedCount,
+		TotalAssignments: progress.TotalAssignments,
+	}
+}
+
+func toAPIAdminStats(stats domain.AdminStats) api.AdminStats {
+	return api.AdminStats{
+		AssignmentsTotal: stats.AssignmentsTotal,
+		AverageGrade:     stats.AverageGrade,
+		DraftCount:       stats.DraftCount,
+		GroupsTotal:      stats.GroupsTotal,
+		LabWorksTotal:    stats.LabWorksTotal,
+		ReviewedCount:    stats.ReviewedCount,
+		RevisionCount:    stats.RevisionCount,
+		StudentsTotal:    stats.StudentsTotal,
+		SubmittedCount:   stats.SubmittedCount,
+		SubmissionsTotal: stats.SubmissionsTotal,
+		TeachersTotal:    stats.TeachersTotal,
+		UsersTotal:       stats.UsersTotal,
 	}
 }
 

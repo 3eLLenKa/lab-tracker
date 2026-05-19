@@ -30,6 +30,7 @@ func (r *AssignmentRepo) ListStudentAssignments(ctx context.Context, studentID u
 			a.status,
 			s.id,
 			s.status,
+			s.attempt_number,
 			s.text_report,
 			s.file_path,
 			s.submitted_at,
@@ -55,6 +56,7 @@ func (r *AssignmentRepo) ListStudentAssignments(ctx context.Context, studentID u
 		var item domain.StudentAssignment
 		var deadline *time.Time
 		var submissionStatus *string
+		var attemptNumber sql.NullInt64
 		var textReport *string
 		var submittedAt *time.Time
 		var comment *string
@@ -68,6 +70,7 @@ func (r *AssignmentRepo) ListStudentAssignments(ctx context.Context, studentID u
 			&item.AssignmentStatus,
 			&item.SubmissionID,
 			&submissionStatus,
+			&attemptNumber,
 			&textReport,
 			&item.FilePath,
 			&submittedAt,
@@ -84,6 +87,10 @@ func (r *AssignmentRepo) ListStudentAssignments(ctx context.Context, studentID u
 		if submissionStatus != nil {
 			value := *submissionStatus
 			item.SubmissionStatus = &value
+		}
+		if attemptNumber.Valid {
+			value := int(attemptNumber.Int64)
+			item.AttemptNumber = &value
 		}
 		if textReport != nil {
 			value := *textReport

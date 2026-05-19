@@ -6,6 +6,7 @@ import (
 	pggrade "lab-tracker/internal/repository/postgres/grade"
 	pggroup "lab-tracker/internal/repository/postgres/group"
 	pglabwork "lab-tracker/internal/repository/postgres/labwork"
+	pgreport "lab-tracker/internal/repository/postgres/report"
 	pgsubmission "lab-tracker/internal/repository/postgres/submission"
 	pguser "lab-tracker/internal/repository/postgres/user"
 )
@@ -17,6 +18,7 @@ type Repo struct {
 	AssignmentRepo *pgassignment.AssignmentRepo
 	SubmissionRepo *pgsubmission.SubmissionRepo
 	GradeRepo      *pggrade.GradeRepo
+	ReportRepo     *pgreport.ReportRepo
 }
 
 func New(db *sql.DB) *Repo {
@@ -27,5 +29,6 @@ func New(db *sql.DB) *Repo {
 		AssignmentRepo: pgassignment.New(db),
 		SubmissionRepo: pgsubmission.New(db),
 		GradeRepo:      pggrade.New(db),
+		ReportRepo:     pgreport.New(db),
 	}
 }

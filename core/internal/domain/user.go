@@ -74,6 +74,7 @@ type StudentAssignment struct {
 	AssignmentStatus string
 	SubmissionID     *int64
 	SubmissionStatus *string
+	AttemptNumber    *int
 	TextReport       *string
 	FilePath         *string
 	SubmittedAt      *string
@@ -95,6 +96,8 @@ type TeacherSubmission struct {
 	StudentName    string
 	GroupName      string
 	LabWorkTitle   string
+	Deadline       *string
+	AttemptNumber  int
 	TextReport     string
 	FilePath       *string
 	Status         string
@@ -108,4 +111,41 @@ type GradeInput struct {
 	TeacherID    uuid.UUID
 	Grade        int
 	Comment      string
+	Status       string
+}
+
+type StudentProgress struct {
+	TotalAssignments int
+	DraftCount       int
+	SubmittedCount   int
+	RevisionCount    int
+	ReviewedCount    int
+	CompletionRate   int
+	AverageGrade     *float64
+}
+
+type AdminStats struct {
+	UsersTotal       int
+	StudentsTotal    int
+	TeachersTotal    int
+	GroupsTotal      int
+	LabWorksTotal    int
+	AssignmentsTotal int
+	SubmissionsTotal int
+	DraftCount       int
+	SubmittedCount   int
+	RevisionCount    int
+	ReviewedCount    int
+	AverageGrade     *float64
+}
+
+type ReportRow struct {
+	StudentName   string
+	GroupName     string
+	LabWorkTitle  string
+	Status        string
+	AttemptNumber int
+	SubmittedAt   *string
+	Grade         *int
+	Comment       *string
 }

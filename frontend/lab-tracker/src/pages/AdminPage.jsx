@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   createLabWork,
   deleteLabWork,
+  exportAdminCsv,
+  getAdminStats,
   listLabWorks,
   updateLabWork,
 } from '../api/auth';
@@ -23,6 +25,7 @@ export default function AdminPage() {
   const navigate = useNavigate();
 
   const [labs, setLabs] = useState([]);
+  const [stats, setStats] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,8 +45,18 @@ export default function AdminPage() {
     }
   }
 
+  async function loadStats() {
+    try {
+      const { data } = await getAdminStats();
+      setStats(data);
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Не удалось загрузить статистику');
+    }
+  }
+
   useEffect(() => {
     loadLabs();
+    loadStats();
   }, []);
 
   const handleLogout = () => {
@@ -104,6 +117,7 @@ export default function AdminPage() {
       }
       resetForm();
       await loadLabs();
+      await loadStats();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Не удалось сохранить запись');
     } finally {
@@ -126,8 +140,29 @@ export default function AdminPage() {
       }
       setNotice('Запись удалена');
       await loadLabs();
+      await loadStats();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Не удалось удалить запись');
+    }
+  };
+
+  const exportCsv = async () => {
+    setError('');
+    setNotice('');
+
+    try {
+      const { data } = await exportAdminCsv();
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'lab-tracker-report.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setNotice('CSV-отчёт сформирован');
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Не удалось сформировать CSV');
     }
   };
 
@@ -151,8 +186,28 @@ export default function AdminPage() {
       <main className="dash-main admin-main">
         <div className="dash-greeting">
           <h1 className="dash-title">Управление лабораторными</h1>
-          <p className="dash-subtitle">Добавление, редактирование и удаление записей</p>
+          <p className="dash-subtitle">CRUD, статистика и экспорт журнала сдач</p>
         </div>
+
+        <section className="admin-panel admin-stats-panel">
+          <div className="admin-panel-head">
+            <div className="dash-section-title">Статистика проекта</div>
+            <button className="btn-secondary" type="button" onClick={exportCsv}>
+              Экспорт CSV
+            </button>
+          </div>
+
+          <div className="admin-stats-grid">
+            <AdminStat value={stats?.labWorksTotal ?? 0} label="Лабораторных" />
+            <AdminStat value={stats?.studentsTotal ?? 0} label="Студентов" />
+            <AdminStat value={stats?.teachersTotal ?? 0} label="Преподавателей" />
+            <AdminStat value={stats?.submissionsTotal ?? 0} label="Сдач" />
+            <AdminStat value={stats?.submittedCount ?? 0} label="На проверке" />
+            <AdminStat value={stats?.revisionCount ?? 0} label="На доработке" />
+            <AdminStat value={stats?.reviewedCount ?? 0} label="Проверено" />
+            <AdminStat value={formatAverage(stats?.averageGrade)} label="Средний балл" />
+          </div>
+        </section>
 
         <div className="admin-grid">
           <section className="admin-panel">
@@ -243,4 +298,20 @@ function Field({ label, children }) {
       {children}
     </label>
   );
+}
+
+function AdminStat({ value, label }) {
+  return (
+    <div className="admin-stat">
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function formatAverage(value) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+  return Number(value).toFixed(1);
 }

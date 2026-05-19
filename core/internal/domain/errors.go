@@ -29,6 +29,7 @@ var (
 	ErrSubmissionNotFound = errors.New("submission not found")
 	ErrAlreadySubmitted   = errors.New("already submitted")
 	ErrDeadlinePassed     = errors.New("deadline passed")
+	ErrSubmissionLocked   = errors.New("submission locked")
 
 	// grades
 	ErrGradeAlreadyExists = errors.New("grade already exists")

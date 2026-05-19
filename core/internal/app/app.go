@@ -38,6 +38,7 @@ func NewApp(cfg *config.Config) *App {
 		repo.AssignmentRepo,
 		repo.SubmissionRepo,
 		repo.GradeRepo,
+		repo.ReportRepo,
 		cfg.JWTSecret,
 	)
 

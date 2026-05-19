@@ -129,6 +129,58 @@ components:
         totalPages:
           type: integer
 
+    StudentProgress:
+      type: object
+      required: [totalAssignments, draftCount, submittedCount, revisionCount, reviewedCount, completionRate]
+      properties:
+        totalAssignments:
+          type: integer
+        draftCount:
+          type: integer
+        submittedCount:
+          type: integer
+        revisionCount:
+          type: integer
+        reviewedCount:
+          type: integer
+        completionRate:
+          type: integer
+        averageGrade:
+          type: number
+          format: double
+          nullable: true
+
+    AdminStats:
+      type: object
+      required: [usersTotal, studentsTotal, teachersTotal, groupsTotal, labWorksTotal, assignmentsTotal, submissionsTotal, draftCount, submittedCount, revisionCount, reviewedCount]
+      properties:
+        usersTotal:
+          type: integer
+        studentsTotal:
+          type: integer
+        teachersTotal:
+          type: integer
+        groupsTotal:
+          type: integer
+        labWorksTotal:
+          type: integer
+        assignmentsTotal:
+          type: integer
+        submissionsTotal:
+          type: integer
+        draftCount:
+          type: integer
+        submittedCount:
+          type: integer
+        revisionCount:
+          type: integer
+        reviewedCount:
+          type: integer
+        averageGrade:
+          type: number
+          format: double
+          nullable: true
+
     Assignment:
       type: object
       properties:
@@ -160,6 +212,9 @@ components:
           nullable: true
         status:
           type: string
+          enum: [draft, submitted, revision, reviewed]
+        attemptNumber:
+          type: integer
         submittedAt:
           type: string
           format: date-time
@@ -187,6 +242,10 @@ components:
           nullable: true
         submissionStatus:
           type: string
+          enum: [draft, submitted, revision, reviewed]
+          nullable: true
+        attemptNumber:
+          type: integer
           nullable: true
         textReport:
           type: string
@@ -222,6 +281,12 @@ components:
           type: string
         labWorkTitle:
           type: string
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        attemptNumber:
+          type: integer
         textReport:
           type: string
         filePath:
@@ -229,6 +294,7 @@ components:
           nullable: true
         status:
           type: string
+          enum: [draft, submitted, revision, reviewed]
         submittedAt:
           type: string
           format: date-time
@@ -402,6 +468,80 @@ paths:
                     items:
                       $ref: '#/components/schemas/Group'
         '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/student/progress:
+    get:
+      tags: [Progress]
+      security: [{ BearerAuth: [] }]
+      summary: Прогресс текущего студента
+      responses:
+        '200':
+          description: Student progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentProgress' }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/admin/stats:
+    get:
+      tags: [Reports]
+      security: [{ BearerAuth: [] }]
+      summary: Статистика для администратора
+      responses:
+        '200':
+          description: Admin statistics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminStats' }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '500':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/admin/export.csv:
+    get:
+      tags: [Reports]
+      security: [{ BearerAuth: [] }]
+      summary: Экспорт журнала сдач в CSV
+      responses:
+        '200':
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -754,7 +894,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [submissionId, grade]
+              required: [submissionId, grade, status]
               properties:
                 submissionId:
                   type: integer
@@ -762,6 +902,10 @@ paths:
                   type: integer
                 comment:
                   type: string
+                  nullable: true
+                status:
+                  type: string
+                  enum: [revision, reviewed]
       responses:
         '200': {}
         '400':

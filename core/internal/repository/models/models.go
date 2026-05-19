@@ -58,9 +58,10 @@ const (
 type SubmissionStatus string
 
 const (
-	SubmissionPending   SubmissionStatus = "pending"
+	SubmissionDraft     SubmissionStatus = "draft"
 	SubmissionSubmitted SubmissionStatus = "submitted"
-	SubmissionChecked   SubmissionStatus = "checked"
+	SubmissionRevision  SubmissionStatus = "revision"
+	SubmissionReviewed  SubmissionStatus = "reviewed"
 )
 
 type User struct {
@@ -104,13 +105,14 @@ type Assignment struct {
 }
 
 type Submission struct {
-	ID           int64
-	AssignmentID int64
-	StudentID    uuid.UUID
-	TextReport   string
-	FilePath     *string
-	Status       SubmissionStatus
-	SubmittedAt  *time.Time
+	ID            int64
+	AssignmentID  int64
+	StudentID     uuid.UUID
+	TextReport    string
+	FilePath      *string
+	Status        SubmissionStatus
+	AttemptNumber int
+	SubmittedAt   *time.Time
 }
 
 type Grade struct {

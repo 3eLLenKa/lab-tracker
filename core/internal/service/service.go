@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"strings"
@@ -24,6 +26,7 @@ type Service struct {
 	assignmentRepo AssignmentRepo
 	submissionRepo SubmissionRepo
 	gradeRepo      GradeRepo
+	reportRepo     ReportRepo
 	jwtSecret      string
 }
 
@@ -35,6 +38,7 @@ func New(
 	assignmentRepo AssignmentRepo,
 	submissionRepo SubmissionRepo,
 	gradeRepo GradeRepo,
+	reportRepo ReportRepo,
 	jwtSecret string,
 ) *Service {
 	return &Service{
@@ -45,6 +49,7 @@ func New(
 		assignmentRepo: assignmentRepo,
 		submissionRepo: submissionRepo,
 		gradeRepo:      gradeRepo,
+		reportRepo:     reportRepo,
 		jwtSecret:      jwtSecret,
 	}
 }
@@ -301,8 +306,14 @@ func (s *Service) SubmitAssignment(ctx context.Context, input domain.SubmissionI
 		return nil
 	}
 
-	if submission.SubmittedAt != nil && submission.Status != models.SubmissionPending {
+	switch submission.Status {
+	case models.SubmissionDraft, models.SubmissionRevision:
+	case models.SubmissionSubmitted:
 		return domain.ErrAlreadySubmitted
+	case models.SubmissionReviewed:
+		return domain.ErrSubmissionLocked
+	default:
+		return domain.ErrInvalidRequest
 	}
 
 	if _, err := s.submissionRepo.UpdateDraft(ctx, submission.ID, input); err != nil {
@@ -324,22 +335,107 @@ func (s *Service) SetGrade(ctx context.Context, input domain.GradeInput) error {
 	if input.SubmissionID <= 0 || input.Grade < 0 || input.Grade > 100 {
 		return domain.ErrInvalidRequest
 	}
+	nextStatus := models.SubmissionStatus(strings.TrimSpace(input.Status))
+	if nextStatus != models.SubmissionRevision && nextStatus != models.SubmissionReviewed {
+		return domain.ErrInvalidRequest
+	}
 
-	if err := s.submissionRepo.ExistsForTeacher(ctx, input.SubmissionID, input.TeacherID); err != nil {
+	submission, err := s.submissionRepo.GetForTeacher(ctx, input.SubmissionID, input.TeacherID)
+	if err != nil {
 		if errors.Is(err, models.ErrSubmissionNotFound) {
 			return domain.ErrSubmissionNotFound
 		}
 		return fmt.Errorf("service: validate teacher submission: %w", err)
 	}
+	switch submission.Status {
+	case models.SubmissionSubmitted, models.SubmissionRevision:
+	case models.SubmissionReviewed:
+		return domain.ErrSubmissionLocked
+	default:
+		return domain.ErrInvalidRequest
+	}
 
 	if err := s.gradeRepo.Save(ctx, input.SubmissionID, input.TeacherID, input.Grade, strings.TrimSpace(input.Comment)); err != nil {
 		return fmt.Errorf("service: save grade: %w", err)
 	}
-	if err := s.submissionRepo.MarkChecked(ctx, input.SubmissionID); err != nil {
-		return fmt.Errorf("service: mark submission checked: %w", err)
+	if err := s.submissionRepo.SetStatus(ctx, input.SubmissionID, nextStatus); err != nil {
+		return fmt.Errorf("service: update submission status: %w", err)
 	}
 
 	return nil
+}
+
+func (s *Service) GetStudentProgress(ctx context.Context, studentID uuid.UUID) (*domain.StudentProgress, error) {
+	progress, err := s.reportRepo.GetStudentProgress(ctx, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("service: get student progress: %w", err)
+	}
+	return progress, nil
+}
+
+func (s *Service) GetAdminStats(ctx context.Context) (*domain.AdminStats, error) {
+	stats, err := s.reportRepo.GetAdminStats(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("service: get admin stats: %w", err)
+	}
+	return stats, nil
+}
+
+func (s *Service) ExportAdminReportCSV(ctx context.Context) ([]byte, error) {
+	rows, err := s.reportRepo.ListReportRows(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("service: list report rows: %w", err)
+	}
+
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	if err := writer.Write([]string{
+		"student",
+		"group",
+		"lab_work",
+		"status",
+		"attempt",
+		"submitted_at",
+		"grade",
+		"comment",
+	}); err != nil {
+		return nil, fmt.Errorf("service: write csv header: %w", err)
+	}
+
+	for _, row := range rows {
+		submittedAt := ""
+		if row.SubmittedAt != nil {
+			submittedAt = *row.SubmittedAt
+		}
+		grade := ""
+		if row.Grade != nil {
+			grade = fmt.Sprintf("%d", *row.Grade)
+		}
+		comment := ""
+		if row.Comment != nil {
+			comment = *row.Comment
+		}
+
+		if err := writer.Write([]string{
+			row.StudentName,
+			row.GroupName,
+			row.LabWorkTitle,
+			row.Status,
+			fmt.Sprintf("%d", row.AttemptNumber),
+			submittedAt,
+			grade,
+			comment,
+		}); err != nil {
+			return nil, fmt.Errorf("service: write csv row: %w", err)
+		}
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return nil, fmt.Errorf("service: flush csv: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 func validateLabWork(input domain.LabWorkInput) error {

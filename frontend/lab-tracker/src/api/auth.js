@@ -23,8 +23,11 @@ export const createLabWork = (data) => api.post('/v1/labworks', data);
 export const updateLabWork = (id, data) => api.put(`/v1/labworks/${id}`, data);
 export const deleteLabWork = (id) => api.delete(`/v1/labworks/${id}`);
 export const listStudentAssignments = () => api.get('/v1/student/assignments');
+export const getStudentProgress = () => api.get('/v1/student/progress');
 export const listTeacherSubmissions = () => api.get('/v1/teacher/submissions');
 export const submitAssignment = (data) => api.post('/v1/submissions/create', data);
 export const setGrade = (data) => api.post('/v1/grades/set', data);
+export const getAdminStats = () => api.get('/v1/admin/stats');
+export const exportAdminCsv = () => api.get('/v1/admin/export.csv', { responseType: 'blob' });
 
 export default api;

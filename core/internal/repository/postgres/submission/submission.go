@@ -36,6 +36,7 @@ func (r *SubmissionRepo) GetStudentAssignmentMeta(ctx context.Context, assignmen
 			s.text_report,
 			s.file_path,
 			s.status,
+			s.attempt_number,
 			s.submitted_at
 		FROM assignments a
 		JOIN users u ON u.group_id = a.group_id
@@ -50,6 +51,7 @@ func (r *SubmissionRepo) GetStudentAssignmentMeta(ctx context.Context, assignmen
 	var textReport sql.NullString
 	var filePath sql.NullString
 	var status sql.NullString
+	var attemptNumber sql.NullInt64
 	var submittedAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, q, assignmentID, studentID).Scan(
@@ -65,6 +67,7 @@ func (r *SubmissionRepo) GetStudentAssignmentMeta(ctx context.Context, assignmen
 		&textReport,
 		&filePath,
 		&status,
+		&attemptNumber,
 		&submittedAt,
 	)
 	if err != nil {
@@ -104,6 +107,9 @@ func (r *SubmissionRepo) GetStudentAssignmentMeta(ctx context.Context, assignmen
 		TextReport:   textReport.String,
 		Status:       models.SubmissionStatus(status.String),
 	}
+	if attemptNumber.Valid {
+		submission.AttemptNumber = int(attemptNumber.Int64)
+	}
 	if filePath.Valid {
 		value := filePath.String
 		submission.FilePath = &value
@@ -118,9 +124,9 @@ func (r *SubmissionRepo) GetStudentAssignmentMeta(ctx context.Context, assignmen
 
 func (r *SubmissionRepo) Create(ctx context.Context, input domain.SubmissionInput) (*models.Submission, error) {
 	const q = `
-		INSERT INTO submissions (assignment_id, student_id, text_report, file_path, status, submitted_at)
-		VALUES ($1, $2, $3, $4, 'submitted', NOW())
-		RETURNING id, assignment_id, student_id, text_report, file_path, status, submitted_at
+		INSERT INTO submissions (assignment_id, student_id, text_report, file_path, status, attempt_number, submitted_at)
+		VALUES ($1, $2, $3, $4, 'submitted', 1, NOW())
+		RETURNING id, assignment_id, student_id, text_report, file_path, status, attempt_number, submitted_at
 	`
 
 	var submission models.Submission
@@ -138,6 +144,7 @@ func (r *SubmissionRepo) Create(ctx context.Context, input domain.SubmissionInpu
 		&submission.TextReport,
 		&submission.FilePath,
 		&submission.Status,
+		&submission.AttemptNumber,
 		&submission.SubmittedAt,
 	); err != nil {
 		return nil, fmt.Errorf("submission repo: create: %w", err)
@@ -152,9 +159,13 @@ func (r *SubmissionRepo) UpdateDraft(ctx context.Context, submissionID int64, in
 		SET text_report = $1,
 		    file_path = $2,
 		    status = 'submitted',
+		    attempt_number = CASE
+		        WHEN status = 'revision' THEN attempt_number + 1
+		        ELSE GREATEST(attempt_number, 1)
+		    END,
 		    submitted_at = NOW()
 		WHERE id = $3
-		RETURNING id, assignment_id, student_id, text_report, file_path, status, submitted_at
+		RETURNING id, assignment_id, student_id, text_report, file_path, status, attempt_number, submitted_at
 	`
 
 	var submission models.Submission
@@ -165,6 +176,7 @@ func (r *SubmissionRepo) UpdateDraft(ctx context.Context, submissionID int64, in
 		&submission.TextReport,
 		&submission.FilePath,
 		&submission.Status,
+		&submission.AttemptNumber,
 		&submission.SubmittedAt,
 	); err != nil {
 		return nil, fmt.Errorf("submission repo: update draft: %w", err)
@@ -182,6 +194,8 @@ func (r *SubmissionRepo) ListTeacherSubmissions(ctx context.Context, teacherID u
 			u.full_name,
 			g.name,
 			lw.title,
+			a.deadline,
+			s.attempt_number,
 			COALESCE(s.text_report, ''),
 			s.file_path,
 			s.status,
@@ -207,6 +221,7 @@ func (r *SubmissionRepo) ListTeacherSubmissions(ctx context.Context, teacherID u
 	result := make([]domain.TeacherSubmission, 0)
 	for rows.Next() {
 		var item domain.TeacherSubmission
+		var deadline *time.Time
 		var submittedAt *time.Time
 		var comment *string
 
@@ -217,6 +232,8 @@ func (r *SubmissionRepo) ListTeacherSubmissions(ctx context.Context, teacherID u
 			&item.StudentName,
 			&item.GroupName,
 			&item.LabWorkTitle,
+			&deadline,
+			&item.AttemptNumber,
 			&item.TextReport,
 			&item.FilePath,
 			&item.Status,
@@ -227,6 +244,10 @@ func (r *SubmissionRepo) ListTeacherSubmissions(ctx context.Context, teacherID u
 			return nil, fmt.Errorf("submission repo: scan teacher submission: %w", err)
 		}
 
+		if deadline != nil {
+			formatted := deadline.Format(time.RFC3339)
+			item.Deadline = &formatted
+		}
 		if submittedAt != nil {
 			formatted := submittedAt.Format(time.RFC3339)
 			item.SubmittedAt = &formatted
@@ -245,30 +266,39 @@ func (r *SubmissionRepo) ListTeacherSubmissions(ctx context.Context, teacherID u
 	return result, nil
 }
 
-func (r *SubmissionRepo) ExistsForTeacher(ctx context.Context, submissionID int64, teacherID uuid.UUID) error {
+func (r *SubmissionRepo) GetForTeacher(ctx context.Context, submissionID int64, teacherID uuid.UUID) (*models.Submission, error) {
 	const q = `
-		SELECT 1
+		SELECT s.id, s.assignment_id, s.student_id, COALESCE(s.text_report, ''), s.file_path, s.status, s.attempt_number, s.submitted_at
 		FROM submissions s
 		JOIN assignments a ON a.id = s.assignment_id
 		JOIN groups g ON g.id = a.group_id
 		WHERE s.id = $1 AND g.teacher_id = $2
 	`
 
-	var marker int
-	if err := r.db.QueryRowContext(ctx, q, submissionID, teacherID).Scan(&marker); err != nil {
+	var submission models.Submission
+	if err := r.db.QueryRowContext(ctx, q, submissionID, teacherID).Scan(
+		&submission.ID,
+		&submission.AssignmentID,
+		&submission.StudentID,
+		&submission.TextReport,
+		&submission.FilePath,
+		&submission.Status,
+		&submission.AttemptNumber,
+		&submission.SubmittedAt,
+	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("submission repo: exists for teacher: %w", models.ErrSubmissionNotFound)
+			return nil, fmt.Errorf("submission repo: get for teacher: %w", models.ErrSubmissionNotFound)
 		}
-		return fmt.Errorf("submission repo: exists for teacher: %w", err)
+		return nil, fmt.Errorf("submission repo: get for teacher: %w", err)
 	}
 
-	return nil
+	return &submission, nil
 }
 
-func (r *SubmissionRepo) MarkChecked(ctx context.Context, submissionID int64) error {
-	const q = `UPDATE submissions SET status = 'checked' WHERE id = $1`
-	if _, err := r.db.ExecContext(ctx, q, submissionID); err != nil {
-		return fmt.Errorf("submission repo: mark checked: %w", err)
+func (r *SubmissionRepo) SetStatus(ctx context.Context, submissionID int64, status models.SubmissionStatus) error {
+	const q = `UPDATE submissions SET status = $1 WHERE id = $2`
+	if _, err := r.db.ExecContext(ctx, q, status, submissionID); err != nil {
+		return fmt.Errorf("submission repo: set status: %w", err)
 	}
 	return nil
 }

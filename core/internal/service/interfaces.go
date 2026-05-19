@@ -33,10 +33,16 @@ type SubmissionRepo interface {
 	Create(ctx context.Context, input domain.SubmissionInput) (*models.Submission, error)
 	UpdateDraft(ctx context.Context, submissionID int64, input domain.SubmissionInput) (*models.Submission, error)
 	ListTeacherSubmissions(ctx context.Context, teacherID uuid.UUID) ([]domain.TeacherSubmission, error)
-	ExistsForTeacher(ctx context.Context, submissionID int64, teacherID uuid.UUID) error
-	MarkChecked(ctx context.Context, submissionID int64) error
+	GetForTeacher(ctx context.Context, submissionID int64, teacherID uuid.UUID) (*models.Submission, error)
+	SetStatus(ctx context.Context, submissionID int64, status models.SubmissionStatus) error
 }
 
 type GradeRepo interface {
 	Save(ctx context.Context, submissionID int64, teacherID uuid.UUID, grade int, comment string) error
+}
+
+type ReportRepo interface {
+	GetStudentProgress(ctx context.Context, studentID uuid.UUID) (*domain.StudentProgress, error)
+	GetAdminStats(ctx context.Context) (*domain.AdminStats, error)
+	ListReportRows(ctx context.Context) ([]domain.ReportRow, error)
 }

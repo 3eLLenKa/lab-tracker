@@ -94,10 +94,38 @@ type LabWorkListResponse struct {
 	TotalPages int       `json:"totalPages"`
 }
 
+// AdminStats defines model for AdminStats.
+type AdminStats struct {
+	AssignmentsTotal int      `json:"assignmentsTotal"`
+	AverageGrade     *float64 `json:"averageGrade,omitempty"`
+	DraftCount       int      `json:"draftCount"`
+	GroupsTotal      int      `json:"groupsTotal"`
+	LabWorksTotal    int      `json:"labWorksTotal"`
+	ReviewedCount    int      `json:"reviewedCount"`
+	RevisionCount    int      `json:"revisionCount"`
+	StudentsTotal    int      `json:"studentsTotal"`
+	SubmittedCount   int      `json:"submittedCount"`
+	SubmissionsTotal int      `json:"submissionsTotal"`
+	TeachersTotal    int      `json:"teachersTotal"`
+	UsersTotal       int      `json:"usersTotal"`
+}
+
+// StudentProgress defines model for StudentProgress.
+type StudentProgress struct {
+	AverageGrade     *float64 `json:"averageGrade,omitempty"`
+	CompletionRate   int      `json:"completionRate"`
+	DraftCount       int      `json:"draftCount"`
+	ReviewedCount    int      `json:"reviewedCount"`
+	RevisionCount    int      `json:"revisionCount"`
+	SubmittedCount   int      `json:"submittedCount"`
+	TotalAssignments int      `json:"totalAssignments"`
+}
+
 // StudentAssignment defines model for StudentAssignment.
 type StudentAssignment struct {
 	AssignmentId     int        `json:"assignmentId"`
 	AssignmentStatus string     `json:"assignmentStatus"`
+	AttemptNumber    *int       `json:"attemptNumber,omitempty"`
 	Deadline         *time.Time `json:"deadline,omitempty"`
 	Description      string     `json:"description"`
 	FilePath         *string    `json:"filePath,omitempty"`
@@ -114,6 +142,8 @@ type StudentAssignment struct {
 // TeacherSubmission defines model for TeacherSubmission.
 type TeacherSubmission struct {
 	AssignmentId   int        `json:"assignmentId"`
+	AttemptNumber  int        `json:"attemptNumber"`
+	Deadline       *time.Time `json:"deadline,omitempty"`
 	FilePath       *string    `json:"filePath,omitempty"`
 	Grade          *int       `json:"grade,omitempty"`
 	GroupName      string     `json:"groupName"`
@@ -157,6 +187,7 @@ type PostApiV1AuthRegisterJSONBody struct {
 type PostApiV1GradesSetJSONBody struct {
 	Comment      *string `json:"comment,omitempty"`
 	Grade        int     `json:"grade"`
+	Status       string  `json:"status"`
 	SubmissionId int     `json:"submissionId"`
 }
 
@@ -216,6 +247,12 @@ type PostApiV1SubmissionsCreateJSONRequestBody PostApiV1SubmissionsCreateJSONBod
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
+	// (GET /api/v1/admin/export.csv)
+	GetApiV1AdminExportCsv(c *gin.Context)
+
+	// (GET /api/v1/admin/stats)
+	GetApiV1AdminStats(c *gin.Context)
+
 	// (POST /api/v1/assignments/create)
 	PostApiV1AssignmentsCreate(c *gin.Context)
 
@@ -246,6 +283,9 @@ type ServerInterface interface {
 	// (GET /api/v1/student/assignments)
 	GetApiV1StudentAssignments(c *gin.Context)
 
+	// (GET /api/v1/student/progress)
+	GetApiV1StudentProgress(c *gin.Context)
+
 	// (PUT /api/v1/labworks/{id})
 	PutApiV1LabworksId(c *gin.Context, id PutApiV1LabworksIdIdPath)
 
@@ -267,6 +307,36 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(c *gin.Context)
+
+// GetApiV1AdminExportCsv operation middleware
+func (siw *ServerInterfaceWrapper) GetApiV1AdminExportCsv(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetApiV1AdminExportCsv(c)
+}
+
+// GetApiV1AdminStats operation middleware
+func (siw *ServerInterfaceWrapper) GetApiV1AdminStats(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetApiV1AdminStats(c)
+}
 
 // PostApiV1AssignmentsCreate operation middleware
 func (siw *ServerInterfaceWrapper) PostApiV1AssignmentsCreate(c *gin.Context) {
@@ -367,6 +437,21 @@ func (siw *ServerInterfaceWrapper) GetApiV1StudentAssignments(c *gin.Context) {
 	}
 
 	siw.Handler.GetApiV1StudentAssignments(c)
+}
+
+// GetApiV1StudentProgress operation middleware
+func (siw *ServerInterfaceWrapper) GetApiV1StudentProgress(c *gin.Context) {
+
+	c.Set(BearerAuthScopes, []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetApiV1StudentProgress(c)
 }
 
 // GetApiV1Labworks operation middleware
@@ -545,6 +630,8 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
+	router.GET(options.BaseURL+"/api/v1/admin/export.csv", wrapper.GetApiV1AdminExportCsv)
+	router.GET(options.BaseURL+"/api/v1/admin/stats", wrapper.GetApiV1AdminStats)
 	router.POST(options.BaseURL+"/api/v1/assignments/create", wrapper.PostApiV1AssignmentsCreate)
 	router.POST(options.BaseURL+"/api/v1/auth/login", wrapper.PostApiV1AuthLogin)
 	router.POST(options.BaseURL+"/api/v1/auth/register", wrapper.PostApiV1AuthRegister)
@@ -555,10 +642,96 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/api/v1/labworks", wrapper.PostApiV1Labworks)
 	router.GET(options.BaseURL+"/api/v1/labworks/:id", wrapper.GetApiV1LabworksId)
 	router.GET(options.BaseURL+"/api/v1/student/assignments", wrapper.GetApiV1StudentAssignments)
+	router.GET(options.BaseURL+"/api/v1/student/progress", wrapper.GetApiV1StudentProgress)
 	router.PUT(options.BaseURL+"/api/v1/labworks/:id", wrapper.PutApiV1LabworksId)
 	router.DELETE(options.BaseURL+"/api/v1/labworks/:id", wrapper.DeleteApiV1LabworksId)
 	router.GET(options.BaseURL+"/api/v1/teacher/submissions", wrapper.GetApiV1TeacherSubmissions)
 	router.POST(options.BaseURL+"/api/v1/submissions/create", wrapper.PostApiV1SubmissionsCreate)
+}
+
+type GetApiV1AdminExportCsvRequestObject struct{}
+
+type GetApiV1AdminExportCsvResponseObject interface {
+	VisitGetApiV1AdminExportCsvResponse(w http.ResponseWriter) error
+}
+
+type GetApiV1AdminExportCsv200TextcsvResponse []byte
+
+func (response GetApiV1AdminExportCsv200TextcsvResponse) VisitGetApiV1AdminExportCsvResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", `attachment; filename="lab-tracker-report.csv"`)
+	w.WriteHeader(200)
+	_, err := w.Write(response)
+	return err
+}
+
+type GetApiV1AdminExportCsv401JSONResponse ErrorResponse
+
+func (response GetApiV1AdminExportCsv401JSONResponse) VisitGetApiV1AdminExportCsvResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1AdminExportCsv403JSONResponse ErrorResponse
+
+func (response GetApiV1AdminExportCsv403JSONResponse) VisitGetApiV1AdminExportCsvResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1AdminExportCsv500JSONResponse ErrorResponse
+
+func (response GetApiV1AdminExportCsv500JSONResponse) VisitGetApiV1AdminExportCsvResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1AdminStatsRequestObject struct{}
+
+type GetApiV1AdminStatsResponseObject interface {
+	VisitGetApiV1AdminStatsResponse(w http.ResponseWriter) error
+}
+
+type GetApiV1AdminStats200JSONResponse AdminStats
+
+func (response GetApiV1AdminStats200JSONResponse) VisitGetApiV1AdminStatsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1AdminStats401JSONResponse ErrorResponse
+
+func (response GetApiV1AdminStats401JSONResponse) VisitGetApiV1AdminStatsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1AdminStats403JSONResponse ErrorResponse
+
+func (response GetApiV1AdminStats403JSONResponse) VisitGetApiV1AdminStatsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1AdminStats500JSONResponse ErrorResponse
+
+func (response GetApiV1AdminStats500JSONResponse) VisitGetApiV1AdminStatsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type PostApiV1AssignmentsCreateRequestObject struct {
@@ -1053,6 +1226,48 @@ func (response GetApiV1StudentAssignments500JSONResponse) VisitGetApiV1StudentAs
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetApiV1StudentProgressRequestObject struct{}
+
+type GetApiV1StudentProgressResponseObject interface {
+	VisitGetApiV1StudentProgressResponse(w http.ResponseWriter) error
+}
+
+type GetApiV1StudentProgress200JSONResponse StudentProgress
+
+func (response GetApiV1StudentProgress200JSONResponse) VisitGetApiV1StudentProgressResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1StudentProgress401JSONResponse ErrorResponse
+
+func (response GetApiV1StudentProgress401JSONResponse) VisitGetApiV1StudentProgressResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1StudentProgress403JSONResponse ErrorResponse
+
+func (response GetApiV1StudentProgress403JSONResponse) VisitGetApiV1StudentProgressResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetApiV1StudentProgress500JSONResponse ErrorResponse
+
+func (response GetApiV1StudentProgress500JSONResponse) VisitGetApiV1StudentProgressResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type PutApiV1LabworksIdRequestObject struct {
 	Id   PutApiV1LabworksIdIdPath `json:"id"`
 	Body *PutApiV1LabworksIdJSONRequestBody
@@ -1302,6 +1517,12 @@ func (response PostApiV1SubmissionsCreate500JSONResponse) VisitPostApiV1Submissi
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /api/v1/admin/export.csv)
+	GetApiV1AdminExportCsv(ctx context.Context, request GetApiV1AdminExportCsvRequestObject) (GetApiV1AdminExportCsvResponseObject, error)
+
+	// (GET /api/v1/admin/stats)
+	GetApiV1AdminStats(ctx context.Context, request GetApiV1AdminStatsRequestObject) (GetApiV1AdminStatsResponseObject, error)
+
 	// (POST /api/v1/assignments/create)
 	PostApiV1AssignmentsCreate(ctx context.Context, request PostApiV1AssignmentsCreateRequestObject) (PostApiV1AssignmentsCreateResponseObject, error)
 
@@ -1332,6 +1553,9 @@ type StrictServerInterface interface {
 	// (GET /api/v1/student/assignments)
 	GetApiV1StudentAssignments(ctx context.Context, request GetApiV1StudentAssignmentsRequestObject) (GetApiV1StudentAssignmentsResponseObject, error)
 
+	// (GET /api/v1/student/progress)
+	GetApiV1StudentProgress(ctx context.Context, request GetApiV1StudentProgressRequestObject) (GetApiV1StudentProgressResponseObject, error)
+
 	// (PUT /api/v1/labworks/{id})
 	PutApiV1LabworksId(ctx context.Context, request PutApiV1LabworksIdRequestObject) (PutApiV1LabworksIdResponseObject, error)
 
@@ -1355,6 +1579,56 @@ func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareF
 type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
+}
+
+// GetApiV1AdminExportCsv operation middleware
+func (sh *strictHandler) GetApiV1AdminExportCsv(ctx *gin.Context) {
+	var request GetApiV1AdminExportCsvRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetApiV1AdminExportCsv(ctx, request.(GetApiV1AdminExportCsvRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetApiV1AdminExportCsv")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(GetApiV1AdminExportCsvResponseObject); ok {
+		if err := validResponse.VisitGetApiV1AdminExportCsvResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetApiV1AdminStats operation middleware
+func (sh *strictHandler) GetApiV1AdminStats(ctx *gin.Context) {
+	var request GetApiV1AdminStatsRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetApiV1AdminStats(ctx, request.(GetApiV1AdminStatsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetApiV1AdminStats")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(GetApiV1AdminStatsResponseObject); ok {
+		if err := validResponse.VisitGetApiV1AdminStatsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // PostApiV1AssignmentsCreate operation middleware
@@ -1652,6 +1926,31 @@ func (sh *strictHandler) GetApiV1StudentAssignments(ctx *gin.Context) {
 		ctx.Status(http.StatusInternalServerError)
 	} else if validResponse, ok := response.(GetApiV1StudentAssignmentsResponseObject); ok {
 		if err := validResponse.VisitGetApiV1StudentAssignmentsResponse(ctx.Writer); err != nil {
+			ctx.Error(err)
+		}
+	} else if response != nil {
+		ctx.Error(fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetApiV1StudentProgress operation middleware
+func (sh *strictHandler) GetApiV1StudentProgress(ctx *gin.Context) {
+	var request GetApiV1StudentProgressRequestObject
+
+	handler := func(ctx *gin.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetApiV1StudentProgress(ctx, request.(GetApiV1StudentProgressRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetApiV1StudentProgress")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		ctx.Error(err)
+		ctx.Status(http.StatusInternalServerError)
+	} else if validResponse, ok := response.(GetApiV1StudentProgressResponseObject); ok {
+		if err := validResponse.VisitGetApiV1StudentProgressResponse(ctx.Writer); err != nil {
 			ctx.Error(err)
 		}
 	} else if response != nil {

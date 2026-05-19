@@ -351,7 +351,7 @@ body::before {
 
 .dash-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
   margin-bottom: 2.5rem;
 }
@@ -453,7 +453,7 @@ body::before {
   border: 1px solid;
 }
 
-.status-pending   { color: var(--muted);   border-color: var(--border); }
+.status-draft     { color: var(--muted);   border-color: var(--border); }
 .status-submitted { color: #f39c12;        border-color: rgba(243,156,18,0.3); }
 .status-reviewed  { color: var(--accent);  border-color: rgba(46,204,113,0.3); }
 .status-revision  { color: var(--danger);  border-color: rgba(231,76,60,0.3); }
@@ -566,6 +566,52 @@ body::before {
   background: var(--surface);
   border: 1px solid var(--border);
   padding: 1.25rem;
+}
+
+.admin-stats-panel {
+  margin-bottom: 1.25rem;
+}
+
+.admin-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.admin-panel-head .dash-section-title {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.admin-stat {
+  border: 1px solid var(--border);
+  background: rgba(7, 13, 10, 0.45);
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-stat strong {
+  color: var(--accent);
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.admin-stat span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .admin-form {
@@ -694,6 +740,14 @@ body::before {
   gap: 0.65rem;
 }
 
+.submission-state-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .submission-form {
   border-top: 1px solid var(--border);
   padding-top: 1rem;
@@ -727,9 +781,98 @@ body::before {
   max-width: 980px;
 }
 
+.filter-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter-tab {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.filter-tab span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.filter-tab strong {
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.filter-tab-active {
+  border-color: var(--accent-dim);
+}
+
 .teacher-list {
   display: grid;
   gap: 0.8rem;
+}
+
+.teacher-details-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.info-line {
+  border: 1px solid var(--border);
+  background: rgba(7, 13, 10, 0.45);
+  padding: 0.75rem 0.85rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.info-line span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.info-line strong {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.teacher-note {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(243,156,18,0.25);
+  background: rgba(243,156,18,0.08);
+}
+
+.teacher-note strong {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.teacher-note span {
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.teacher-note-revision {
+  border-color: rgba(231,76,60,0.3);
+  background: rgba(231,76,60,0.08);
 }
 
 .grade-form-grid {
@@ -750,11 +893,13 @@ body::before {
   }
 
   .dash-stats,
-  .admin-grid {
+  .admin-grid,
+  .admin-stats-grid {
     grid-template-columns: 1fr;
   }
 
   .toolbar,
+  .admin-panel-head,
   .form-actions,
   .admin-item-actions,
   .student-actions {
@@ -773,6 +918,8 @@ body::before {
 
   .student-card-top,
   .teacher-head,
+  .teacher-details-grid,
+  .filter-tabs,
   .grade-form-grid {
     grid-template-columns: 1fr;
     display: grid;
